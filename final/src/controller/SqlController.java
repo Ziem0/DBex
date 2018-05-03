@@ -1,10 +1,16 @@
 package controller;
 
+import model.Applicant;
+import model.Mentor;
+import view.View;
+
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.sql.*;
+import java.util.LinkedList;
+import java.util.List;
 
 public class SqlController {
 
@@ -19,7 +25,6 @@ public class SqlController {
             Class.forName(DRIVER);
         } catch (ClassNotFoundException e) {
             System.err.println("Incorrect driver");
-            e.printStackTrace();
         }
 
         try {
@@ -28,22 +33,20 @@ public class SqlController {
             this.conn.setAutoCommit(false);
         } catch (SQLException e) {
             System.err.println("Invalid connection");
-            e.printStackTrace();
         }
     }
 
     public boolean createTable() {
-        String createMentorsTable = "create table if not exists mentors(" +
-                "ID integer primary key unique, first text, last text, nick text, phone text, email text, city text, num integer)";
-        String createApplicantsTable = "create table if not exists applicants(" +
-                "ID integer primary key unique, first text, last text, phone text, email text, code integer)";
+        String createMentorsTable = "CREATE TABLE IF NOT EXISTS mentors(" +
+                "ID INTEGER PRIMARY KEY UNIQUE, first TEXT, last TEXT, nick TEXT, phone TEXT, email TEXT, city TEXT, num INTEGER)";
+        String createApplicantsTable = "CREATE TABLE IF NOT EXISTS applicants(" +
+                "ID INTEGER PRIMARY KEY UNIQUE, first TEXT, last TEXT, phone TEXT, email TEXT, code INTEGER)";
 
         try {
             this.stat.execute(createMentorsTable);
             this.stat.execute(createApplicantsTable);
         } catch (SQLException e) {
             System.err.println("Table creator is invalid");
-            e.printStackTrace();
             return false;
         }
         return true;
@@ -84,15 +87,12 @@ public class SqlController {
             preparedStatement.executeBatch();
         } catch (FileNotFoundException e) {
             System.err.println("Invalid file path");
-            e.printStackTrace();
             return false;
         } catch (IOException e) {
             System.err.println("Invalid IO");
-            e.printStackTrace();
             return false;
         } catch (SQLException e) {
             System.err.println("Invalid sql command");
-            e.printStackTrace();
             return false;
         }
         return true;
@@ -101,15 +101,42 @@ public class SqlController {
     private void displaySelect(ResultSet result) throws SQLException {
         ResultSetMetaData rsmd = result.getMetaData();
         Integer counter = rsmd.getColumnCount();
-        String strToPrint = "%-20s";
-
+        String strToPrint = "%-23s";
+        System.out.println("\n");
+        System.out.println(rsmd.getTableName(1).isEmpty() ? "MENTORS data" : rsmd.getTableName(1).toUpperCase() + " data:");
+        for (Integer i = 1; i <= counter; i++) {
+            System.out.printf(strToPrint, rsmd.getColumnLabel(i).toUpperCase());
+            if (i == counter) {
+                System.out.println("\t");
+            }
+        }
         while (result.next()) {
             for (int i = 1; i <= counter; i++) {
-                System.out.printf(strToPrint, result.getString(i));
+                System.out.printf(strToPrint, result.getString(i).length() > 20 ? result.getString(i).subSequence(0, 20) : result.getString(i));
                 if (i == counter) {
                     System.out.println("\t");
                 }
             }
+        }
+    }
+
+    public void displayAllMentors() {
+        String query = "SELECT * FROM mentors";
+        try {
+            ResultSet result = this.stat.executeQuery(query);
+            this.displaySelect(result);
+        } catch (SQLException e) {
+            System.err.println("Invalid query");
+        }
+    }
+
+    public void displayAllApplicants() {
+        String query = "SELECT * FROM applicants";
+        try {
+            ResultSet result = this.stat.executeQuery(query);
+            this.displaySelect(result);
+        } catch (SQLException e) {
+            System.err.println("Invalid query");
         }
     }
 
@@ -119,22 +146,106 @@ public class SqlController {
             this.displaySelect(result);
         } catch (SQLException e) {
             System.err.println("Invalid query");
-            e.printStackTrace();
         }
     }
 
-    
+    public void displayFullNameForMentors() {
+        String query = "SELECT first || ' ' || last AS fullName FROM mentors";
+        try {
+            ResultSet result = this.stat.executeQuery(query);
+            this.displaySelect(result);
+        } catch (SQLException e) {
+            System.err.println("Invalid query");
+        }
+    }
 
+    public void displayNickForMentors() {
+        String query = "SELECT first, nick FROM mentors";
+        try {
+            ResultSet result = this.stat.executeQuery(query);
+            this.displaySelect(result);
+        } catch (SQLException e) {
+            System.err.println("Invalid query");
+        }
+    }
 
-    private boolean changeDB(String command) {
+    public void addFullNameColumnForApplicants() {
+        String command1 = "alter table applicants add fullName text";
+        String command2 = "update applicants set fullName=first || ' ' || last";
+        this.changeDB(command1);
+        this.changeDB(command2);
+    }
+
+    public void displayFullNameAndPhoneForApplicantByName(String name) {
+        String query = "select fullName, phone from applicants where first is '" + name + "'";
+        try {
+            ResultSet result = this.stat.executeQuery(query);
+            this.displaySelect(result);
+        } catch (SQLException e) {
+            System.err.println("Invalid query");
+        }
+    }
+
+    public void changeDB(String command) {
         try {
             this.stat.executeUpdate(command);
         } catch (SQLException e) {
             System.err.println("Invalid command");
-            e.printStackTrace();
-            return false;
         }
-        return true;
+    }
+
+    public void deleteApplicantByID() throws NumberFormatException {
+        this.displayAllApplicants();
+        System.out.println("Select ID for applicant you want to remove:");
+        Integer num = Integer.valueOf(View.input());
+        String command = "delete from applicants where id is " + num;
+        this.changeDB(command);
+    }
+
+
+    public void addNewApplicant() throws SQLException {
+        String command = "INSERT INTO applicants VALUES(NULL,?,?,?,?,?,?)";
+        int counter = 0;
+        PreparedStatement preparedStatement = this.conn.prepareStatement(command);
+        ResultSet result = this.stat.executeQuery("SELECT * FROM applicants");
+        ResultSetMetaData rsmd = result.getMetaData();
+
+        while (++counter <= 6) {
+            System.out.println("Enter " + rsmd.getColumnLabel(counter + 1).toUpperCase() + ": ");
+            preparedStatement.setString(counter, View.input());
+        }
+        preparedStatement.addBatch();
+        preparedStatement.executeBatch();
+    }
+
+    public List<Mentor> createMentorsInstances() throws SQLException {
+        List<Mentor> mentorsRecords = new LinkedList<>();
+        ResultSet result = this.stat.executeQuery("SELECT * FROM mentors");
+        while (result.next()) {
+            String firstName = result.getString(1);
+            String lastName = result.getString(2);
+            String nickName = result.getString(3);
+            String phoneNum = result.getString(4);
+            String email = result.getString(5);
+            String city = result.getString(6);
+            int favNum = result.getInt(7);
+            mentorsRecords.add(new Mentor(firstName, lastName, nickName, phoneNum, email, city, favNum));
+        }
+        return mentorsRecords;
+    }
+
+    public List<Applicant> createApplicantsInstances() throws SQLException {
+        List<Applicant> applicantsRecords = new LinkedList<>();
+        ResultSet result = this.stat.executeQuery("SELECT * FROM applicants");
+        while (result.next()) {
+            String firstName = result.getString(1);
+            String lastName = result.getString(2);
+            String phoneNum = result.getString(3);
+            String email = result.getString(4);
+            int code = result.getInt(5);
+            applicantsRecords.add(new Applicant(firstName, lastName, phoneNum, email, code));
+        }
+        return applicantsRecords;
     }
 
     public void close() {
@@ -144,21 +255,35 @@ public class SqlController {
             this.conn.close();
         } catch (SQLException e) {
             System.err.println("Close error");
-            e.printStackTrace();
         }
         System.exit(0);
     }
 
-
-    public static void main(String[] args) throws SQLException {
-        SqlController controller = new SqlController();
-        controller.stat.execute("DROP TABLE mentors");
-        controller.stat.execute("DROP TABLE applicants");
-        controller.createTable();
-        controller.importMentorsDataFromCsv();
-        controller.importApplicantsDataFromCsv();
-        controller.selectDB("select * from mentors;");
-
-        controller.close();
+    public void clearRecords() {
+        try {
+            this.stat.execute("DROP TABLE mentors");
+            this.stat.execute("DROP TABLE applicants");
+        } catch (SQLException e) {
+            System.err.println("Invalid delete");
+        }
     }
+
+//    public static void main(String[] args) throws SQLException {
+//        SqlController controller = new SqlController();
+//        controller.clearRecords();
+//        controller.createTable();
+//        controller.importMentorsDataFromCsv();
+//        controller.importApplicantsDataFromCsv();
+//        controller.displayAllMentors();
+//        controller.displayFullNameForMentors();
+//        controller.displayNickForMentors();
+//        controller.addFullNameColumnForApplicants();
+//        controller.displayFullNameAndPhoneForApplicantByName("Carol");
+//        controller.addNewApplicant();
+//        controller.deleteApplicantByID();
+//        controller.displayAllApplicants();
+//        controller.createMentorsInstances().forEach(System.out::println);
+//        controller.createApplicantsInstances().forEach(System.out::println);
+//        controller.close();
+//    }
 }
