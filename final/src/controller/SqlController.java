@@ -69,12 +69,13 @@ public class SqlController {
             String line;
             while ((line = br.readLine()) != null) {
                 String[] values = line.split(",");
-                int counter = 0;
+                int counter = 1;
                 for (String v : values) {
                     if (v.matches("[0-9]{1,}")) {
-                        preparedStatement.setInt(counter + 1, Integer.parseInt(values[counter]));
+                        preparedStatement.setInt(counter, Integer.parseInt(v));
                     } else {
-                        preparedStatement.setString(counter + 1 , values[counter]);
+                        String cleanV = v.replace("'", "");
+                        preparedStatement.setString(counter, cleanV);
                     }
                     counter++;
                 }
@@ -97,19 +98,35 @@ public class SqlController {
         return true;
     }
 
+    private void displaySelect(ResultSet result) throws SQLException {
+        ResultSetMetaData rsmd = result.getMetaData();
+        Integer counter = rsmd.getColumnCount();
+        String strToPrint = "%-20s";
 
-    public ResultSet selectDB(String query) {
-        try {
-            ResultSet result = this.stat.executeQuery(query);
-            return result;
-        } catch (SQLException e) {
-            System.err.println("Invalid query");
-            e.printStackTrace();
-            return null;
+        while (result.next()) {
+            for (int i = 1; i <= counter; i++) {
+                System.out.printf(strToPrint, result.getString(i));
+                if (i == counter) {
+                    System.out.println("\t");
+                }
+            }
         }
     }
 
-    public boolean changeDB(String command) {
+    public void selectDB(String query) {
+        try {
+            ResultSet result = this.stat.executeQuery(query);
+            this.displaySelect(result);
+        } catch (SQLException e) {
+            System.err.println("Invalid query");
+            e.printStackTrace();
+        }
+    }
+
+    
+
+
+    private boolean changeDB(String command) {
         try {
             this.stat.executeUpdate(command);
         } catch (SQLException e) {
@@ -140,6 +157,8 @@ public class SqlController {
         controller.createTable();
         controller.importMentorsDataFromCsv();
         controller.importApplicantsDataFromCsv();
+        controller.selectDB("select * from mentors;");
+
         controller.close();
     }
 }
